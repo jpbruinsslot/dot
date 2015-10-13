@@ -9,7 +9,7 @@ import (
 const (
 	Name    = "dot"
 	Usage   = "simple dotfiles tracking"
-	Version = "0.1.0.beta"
+	Version = "0.1.1.beta"
 )
 
 func main() {

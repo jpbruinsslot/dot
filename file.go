@@ -22,24 +22,14 @@ func SyncFiles() {
 		return
 	}
 
-	// create done channel on which we will
-	// communicate when syncing has been finished
-	done := make(chan bool)
-
 	// when we have files the sync them
 	if len(c.Files) > 0 {
-
 		// for every file track it
-		go func() {
-			for name, path := range c.Files {
-				// get full path
-				fullPath := fmt.Sprintf("%s%s", HomeDir(), path)
-				go TrackFile(name, fullPath, false)
-			}
-			done <- true
-		}()
-
-		<-done
+		for name, path := range c.Files {
+			// get full path
+			fullPath := fmt.Sprintf("%s%s", HomeDir(), path)
+			TrackFile(name, fullPath, false)
+		}
 	} else {
 		PrintBodyError("there aren't any files being tracked. Begin doing " +
 			"so with: `dot add [name] [path]`")
@@ -115,6 +105,7 @@ func TrackFile(name string, fullPath string, push bool) {
 		}
 
 		// create symlink (os.Symlink(oldname, newname))
+		dst = fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, relPath)
 		err = os.Symlink(dst, fullPath)
 		if err != nil {
 			log.Fatal(err)
