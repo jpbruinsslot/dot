@@ -27,6 +27,8 @@ $ go install github.com/erroneousboat/dot
 $ dot --help
 ```
 
+Or copy one of the binaries present in the `bin/` folder.
+
 # Setting up
 To begin using `dot` we need to create a folder in your home folder where we
 will track the dotfiles. And initializing a git repository.

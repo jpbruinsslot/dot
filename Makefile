@@ -1,43 +1,45 @@
-# https://github.com/johannesboyne/godockersample
-# https://blog.codeship.com/building-minimal-docker-containers-for-go-applications/
-# https://developer.atlassion.com/blog/2015/07/osx-static-golang-binaries-with-docker/
-DEPS = \
-	github.com/codegangsta/cli \
-	github.com/fatih/color
+APP_NAME=dot
 
-default: test
+default: build
 
-# -timeout	timeout in seconds
-# -v		verbose output
+# -timeout 	timout in seconds
+#  -v		verbose output
 test:
 	go test -timeout=5s -v
-
-# -d	download but don't install
-# -v	verbose output
-deps:
-	go get -d -v $(DEPS)
 
 # `CGO_ENABLED=0`
 # Because of dynamically linked libraries, this will statically compile the
 # app with all libraries built in. You won't be able to cross-compile if CGO
-# is enabled.
-#
-# `GOOS=linux`
+# is enabled. This is because Go binary is looking for libraries on the
+# operating system it’s running in. We compiled our app, but it still is
+# dynamically linked to the libraries it needs to run
+# (i.e., all the C libraries it binds to). When using a minimal docker image
+# the operating system doesn't have these libraries.
 #
 # `-a`
-# Force rebuilding of packages, all import will be rebuilt with cgo disabled.
+# Force rebuilding of package, all import will be rebuilt with cgo disabled,
+# which means all the imports will be rebuilt with cgo disabled.
 #
 # `-installsuffix cgo`
-#  A suffix to use in the name of the package installation directory
+# A suffix to use in the name of the package installation directory
 #
 # `-o`
 # Output
 #
-# `bin/dot`
+# `./bin/[name-of-app]`
 # Placement of the binary
-build: deps
-	@mkdir -p bin/
-	CGO_ENABLED=1 go build -a -installsuffix cgo -o bin/dot
+#
+# `.`
+# Location of the source files
+build:
+	CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME} ./src/
 
+# Cross-compile
+# http://dave.cheney.net/2015/08/22/cross-compilation-with-go-1-5
+build-linux:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-linux-amd64 ./src/
 
-.PHONY: default test deps build
+build-mac:
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-darwin-amd64 ./src/
+
+.PHONY: default test build build-linux build-mac

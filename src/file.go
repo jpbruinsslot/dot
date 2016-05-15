@@ -5,9 +5,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"path"
 	"path/filepath"
+
+	"github.com/coreos/fleet/log"
 )
 
 func SyncFiles() {
@@ -59,6 +61,9 @@ func SyncFiles() {
 //    add an entry to the config file.
 func TrackFile(name string, fullPath string, push bool) {
 
+	// Base
+	base := path.Base(fullPath)
+
 	// get relative path
 	relPath, err := GetRelativePath(fullPath)
 	if err != nil {
@@ -97,15 +102,15 @@ func TrackFile(name string, fullPath string, push bool) {
 		PrintBody(message)
 
 		// put in backup folder, set named folder based on `name`, e.g.:
-		// `/home/erroneousboat/dotfiles/backup/[name]/[relPath]`
-		dst := fmt.Sprintf("%s%s/backup/%s%s", HomeDir(), c.DotPath, name, relPath)
+		// `/home/erroneousboat/dotfiles/backup/[name]/[base]`
+		dst := fmt.Sprintf("%s%s/backup/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = MakeAndMoveToDir(fullPath, dst)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		// create symlink (os.Symlink(oldname, newname))
-		dst = fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, relPath)
+		dst = fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = os.Symlink(dst, fullPath)
 		if err != nil {
 			log.Fatal(err)
@@ -117,8 +122,8 @@ func TrackFile(name string, fullPath string, push bool) {
 		PrintBody(message)
 
 		// put in files folder, set named folder based on `name`, e.g.:
-		// `/home/erroneousboat/dotfiles/files/[name]/[relPath]`
-		dst := fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, relPath)
+		// `/home/erroneousboat/dotfiles/files/[name]/[base]`
+		dst := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = MakeAndMoveToDir(fullPath, dst)
 		if err != nil {
 			log.Fatal(err)
@@ -177,7 +182,7 @@ func UntrackFile(name string, push bool) {
 	}
 
 	// check if src is present
-	src := fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, path)
+	src := fmt.Sprintf("%s%s/files/%s", HomeDir(), c.DotPath, name)
 	if _, err = os.Stat(src); err != nil {
 		message := fmt.Sprintf("not able to find %s", src)
 		PrintBodyError(message)
@@ -203,14 +208,6 @@ func UntrackFile(name string, push bool) {
 		log.Fatal(err)
 	}
 
-	// remove source directory, from hence the file came
-	dir := fmt.Sprintf("%s%s/files/%s", HomeDir(), c.DotPath, name)
-	err = os.Remove(dir)
-	if err != nil {
-		message := fmt.Sprintf("not able to remove %s", dir)
-		PrintBodyError(message)
-	}
-
 	// remove entry from config and save config
 	delete(c.Files, name)
 	c.Save()
@@ -225,7 +222,6 @@ func UntrackFile(name string, push bool) {
 // `dst` (`dst` will be absolute path to the destination). The boolean `del`,
 // if set to true will delete the source directory.
 func MakeAndMoveToDir(src string, dst string) error {
-
 	// folder or file
 	f, err := os.Stat(src)
 	if err != nil {
@@ -236,6 +232,8 @@ func MakeAndMoveToDir(src string, dst string) error {
 	// directories. os.Rename() will not work when these are not already
 	// present.
 	if f.IsDir() {
+		os.MkdirAll(dst, 0755)
+
 		err := os.Rename(src, dst)
 		if err != nil {
 			return err

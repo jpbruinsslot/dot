@@ -6,10 +6,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"os/user"
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/mitchellh/go-homedir"
 )
 
 // PrintHeader will print out a colourful header given a string
@@ -37,14 +37,13 @@ func PrintBodyError(text string) {
 }
 
 // HomeDir return the home directory of the logged in user.
-// FIXME: this can trip up some operation systems
 func HomeDir() string {
-	user, err := user.Current()
+	dir, err := homedir.Dir()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return user.HomeDir
+	return dir
 }
 
 // GetRelativePathFromCwd will remove the home folder from the current working
@@ -69,7 +68,7 @@ func GetRelativePathFromCwd() (string, error) {
 }
 
 // GetRelativePath will remove the home folder from the argument `fullPath`:
-// `/home/erroneousboat/.nvimrc` will become `.nvimrc`
+// `/home/erroneousboat/.config/nvim` will become `.config/nvim`
 func GetRelativePath(fullPath string) (string, error) {
 	relPath := strings.Split(fullPath, HomeDir())
 
