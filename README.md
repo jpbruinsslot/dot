@@ -12,18 +12,12 @@ repository? For the answer and much more click
 to its original location. The archive serves as a repository and can be
 persisted using a hosted git repository.
 
-# Beta
-Take note that the current version is still in beta. Bugs are to be expected,
-and if you uncover one please add an
-[issue](https://github.com/erroneousboat/dot/issues).
-
 # Installation
 For this version make sure you have [Go](golang.org) installed. And run the
 following commands:
 
 ```bash
-$ go get github.com/erroneousboat/dot
-$ go install github.com/erroneousboat/dot
+$ go get -u github.com/erroneousboat/dot
 $ dot --help
 ```
 
@@ -43,7 +37,7 @@ To start using `dot`, go to the newly created directory and issue the
 following command:
 
 ```bash
-$ dot up
+$ dot sync
 ```
 
 This will initialize the necessary folder and create a `.dotconfig`
@@ -74,5 +68,5 @@ $ dot add -p nvimrc /home/erroneousboat/.nvimrc
 ## Additional machines
 So you've started tracking your files on one machine but now you want to use
 your archive on another machine. Clone your repository on the additional
-machine and use the `dot up` command to start synchronizing your files on the
+machine and use the `dot sync` command to start synchronizing your files on the
 new machine.

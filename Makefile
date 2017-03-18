@@ -32,14 +32,14 @@ test:
 # `.`
 # Location of the source files
 build:
-	CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME} ./src/
+	CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME} .
 
 # Cross-compile
 # http://dave.cheney.net/2015/08/22/cross-compilation-with-go-1-5
 build-linux:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-linux-amd64 ./src/
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-linux-amd64 .
 
 build-mac:
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-darwin-amd64 ./src/
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -a -installsuffix cgo -o ./bin/${APP_NAME}-darwin-amd64 .
 
 .PHONY: default test build build-linux build-mac
