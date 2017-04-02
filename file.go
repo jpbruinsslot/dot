@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 func SyncFiles() {
@@ -110,6 +111,8 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 			MakeAndCopyToDir(src, fullPath)
 			return TrackFile(name, fullPath, push, copyAll)
 		default:
+			msg := fmt.Sprintf("Ignoring %s", name)
+			PrintBodyError(msg)
 			return copyAll
 		}
 	}
@@ -161,6 +164,9 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 			}
 		}
 
+		// trim potential trailing slash for symlink
+		fullPath = strings.TrimRight(fullPath, "/")
+
 		// create symlink (os.Symlink(oldname, newname))
 		dst = fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = os.Symlink(dst, fullPath)
@@ -180,6 +186,9 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		// trim potential trailing slash for symlink
+		fullPath = strings.TrimRight(fullPath, "/")
 
 		// create symlink (os.Symlink(oldname, newname))
 		err = os.Symlink(dst, fullPath)
@@ -236,7 +245,7 @@ func UntrackFile(name string, push bool) {
 	}
 
 	// check if src is present
-	src := fmt.Sprintf("%s%s/files/%s", HomeDir(), c.DotPath, name)
+	src := fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, path)
 	if _, err = os.Stat(src); err != nil {
 		message := fmt.Sprintf("not able to find %s", src)
 		PrintBodyError(message)
@@ -257,7 +266,14 @@ func UntrackFile(name string, push bool) {
 	message := fmt.Sprintf("Moving %s back to %s", name, dst)
 	PrintBody(message)
 
-	err = MakeAndMoveToDir(src, dst)
+	err = MakeAndCopyToDir(src, dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// remove tracked files from repo dir
+	entry := fmt.Sprintf("%s%s/files/%s", HomeDir(), c.DotPath, name)
+	err = os.RemoveAll(entry)
 	if err != nil {
 		log.Fatal(err)
 	}
