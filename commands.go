@@ -113,7 +113,10 @@ func CommandSync() {
 // CommandAdd will add a file or folder for tracking.
 func CommandAdd(name, path string, push, force bool) {
 	PrintHeader("Adding new entry for tracking ...")
-	_ = TrackFile(name, path, push, false)
+	err := TrackFile(name, path, push)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // CommandRemove will remove a file from tracking.
