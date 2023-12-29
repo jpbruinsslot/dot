@@ -21,9 +21,9 @@ func SyncFiles() {
 	// load config
 	c, err := NewConfig(PathDotConfig)
 	if err != nil {
-		message := fmt.Sprintf("not able to load config file. Make sure the " +
-			".dotconfig file is present and points to the correct location")
-		PrintBodyError(message)
+		PrintBodyError(
+			"not able to load config file. Make sure the .dotconfig file is present and points to the correct location",
+		)
 		return
 	}
 
@@ -37,8 +37,7 @@ func SyncFiles() {
 			copyAll = TrackFile(name, fullPath, false, copyAll)
 		}
 	} else {
-		PrintBodyError("there aren't any files being tracked. Begin doing " +
-			"so with: `dot add [name] [path]`")
+		PrintBodyError("there aren't any files being tracked. Begin doing so with: `dot add -name [name] -path [path]`")
 	}
 }
 
@@ -88,8 +87,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 	// check if path is present
 	_, err = os.Stat(fullPath)
 	if err != nil {
-		message := fmt.Sprintf("file not present on system: %s", fullPath)
-		PrintBodyError(message)
+		PrintBodyError(fmt.Sprintf("file not present on system: %s", fullPath))
 
 		if copyAll {
 			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
@@ -108,15 +106,25 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 		case "All":
 			copyAll = true
 			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-			MakeAndCopyToDir(src, fullPath)
+			err := MakeAndCopyToDir(src, fullPath)
+			if err != nil {
+				PrintBodyError(err.Error())
+				return copyAll
+			}
 			return TrackFile(name, fullPath, push, copyAll)
 		case "Y":
 			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-			MakeAndCopyToDir(src, fullPath)
+			err := MakeAndCopyToDir(src, fullPath)
+			if err != nil {
+				PrintBodyError(err.Error())
+				return copyAll
+			}
 			return TrackFile(name, fullPath, push, copyAll)
+		case "N":
+			PrintBodyError(fmt.Sprintf("Ignoring %s", name))
+			return copyAll
 		default:
-			msg := fmt.Sprintf("Ignoring %s", name)
-			PrintBodyError(msg)
+			PrintBodyError("Invalid input")
 			return copyAll
 		}
 	}
@@ -128,16 +136,14 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 	}
 
 	if s.Mode()&os.ModeSymlink == os.ModeSymlink {
-		message := fmt.Sprintf("%s is already symlinked", name)
-		PrintBody(message)
+		PrintBody(fmt.Sprintf("%s is already symlinked", name))
 		return copyAll
 	}
 
 	repoPath := fmt.Sprintf("%s%s/files/%s/", HomeDir(), c.DotPath, name)
 	if _, err := os.Stat(repoPath); err == nil {
 		// no symlink found, already in repo => additional machine
-		message := fmt.Sprintf("Symlinking: %s", name)
-		PrintBody(message)
+		PrintBody(fmt.Sprintf("Symlinking: %s", name))
 
 		// put in backup folder, set named folder based on `name`, e.g.:
 		// `/home/jpbruinsslot/dotfiles/backup/[name]/[base]`
@@ -184,8 +190,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 
 	} else {
 		// no symlink found, not in repo => new entry
-		message := fmt.Sprintf("Symlinking: %s", name)
-		PrintBody(message)
+		PrintBody(fmt.Sprintf("Symlinking: %s", name))
 
 		// put in files folder, set named folder based on `name`, e.g.:
 		// `/home/jpbruinsslot/dotfiles/files/[name]/[base]`
@@ -221,7 +226,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 // in the config file that points to the initial location of the file
 func UntrackFile(name string, push bool) {
 	// open config file
-	c, err := NewConfig(HomeDir() + "/" + ConfigFileName)
+	c, err := NewConfig(fmt.Sprintf("%s/%s", HomeDir(), ConfigFileName))
 	if err != nil {
 		PrintBodyError("not able to find .dotconfig")
 		return
@@ -230,9 +235,12 @@ func UntrackFile(name string, push bool) {
 	// check if `name` is present in c.Files
 	path := c.Files[name]
 	if path == "" {
-		message := fmt.Sprintf("'%s' is not being tracked. Get the list of "+
-			"tracked files with `dot list`", name)
-		PrintBodyError(message)
+		PrintBodyError(
+			fmt.Sprintf(
+				"'%s' is not being tracked. Get the list of tracked files with `dot list`",
+				name,
+			),
+		)
 		return
 	}
 
@@ -240,39 +248,34 @@ func UntrackFile(name string, push bool) {
 	pathSymlink := fmt.Sprintf("%s%s", HomeDir(), path)
 	f, err := os.Lstat(pathSymlink)
 	if err != nil {
-		message := fmt.Sprintf("not able to find: %s", path)
-		PrintBodyError(message)
+		PrintBodyError(fmt.Sprintf("not able to find: %s", path))
 		return
 	}
 
 	// check if path is symlink
 	if f.Mode()&os.ModeSymlink != os.ModeSymlink {
-		message := fmt.Sprintf("%s is not a symlink", path)
-		PrintBodyError(message)
+		PrintBodyError(fmt.Sprintf("%s is not a symlink", path))
 		return
 	}
 
 	// check if src is present
 	src := fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, path)
 	if _, err = os.Stat(src); err != nil {
-		message := fmt.Sprintf("not able to find %s", src)
-		PrintBodyError(message)
+		PrintBodyError(fmt.Sprintf("not able to find %s", src))
 		return
 	}
 
 	// remove symlink
 	err = os.Remove(pathSymlink)
 	if err != nil {
-		message := fmt.Sprintf("not able to remove %s", pathSymlink)
-		PrintBodyError(message)
+		PrintBodyError(fmt.Sprintf("not able to remove %s", pathSymlink))
 		return
 	}
 
 	// move the file or directory
 	dst := fmt.Sprintf("%s%s", HomeDir(), path)
 
-	message := fmt.Sprintf("Moving %s back to %s", name, dst)
-	PrintBody(message)
+	PrintBody(fmt.Sprintf("Moving %s back to %s", name, dst))
 
 	err = MakeAndCopyToDir(src, dst)
 	if err != nil {
