@@ -8,32 +8,22 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/fatih/color"
 	homedir "github.com/mitchellh/go-homedir"
 )
 
 // PrintHeader will print out a colourful header given a string
 func PrintHeader(text string) {
-	color := color.New(color.FgYellow, color.Bold)
-	color.Printf("==> %s\n", text)
+	fmt.Printf("==> %s\n", text)
 }
 
 // PrintBody will print out a colourful body given a string
 func PrintBody(text string) {
-	color := color.New(color.FgCyan)
-	color.Printf("... %s\n", text)
-}
-
-// PrintBodyBold will print out a colourful body give a string
-func PrintBodyBold(text string) {
-	color := color.New(color.FgCyan, color.Bold)
-	color.Printf("... %s\n", text)
+	fmt.Printf("... %s\n", text)
 }
 
 // PrintBodyError will print out a colourful error given a string
 func PrintBodyError(text string) {
-	color := color.New(color.FgRed)
-	color.Printf("... ERROR: %s\n", text)
+	fmt.Printf("... ERROR: %s\n", text)
 }
 
 // HomeDir return the home directory of the logged in user.
@@ -48,7 +38,8 @@ func HomeDir() string {
 
 // GetRelativePathFromCwd will remove the home folder from the current working
 // directory:
-// `/home/erroneousboat/dotfiles/` will become `dotfiles/`
+//
+// `/home/jpbruinsslot/dotfiles/` will become `dotfiles/`
 func GetRelativePathFromCwd() (string, error) {
 	// get current working directory, this returns absolute path
 	currentWorkingDir, err := os.Getwd()
@@ -68,7 +59,8 @@ func GetRelativePathFromCwd() (string, error) {
 }
 
 // GetRelativePath will remove the home folder from the argument `fullPath`:
-// `/home/erroneousboat/.config/nvim` will become `.config/nvim`
+//
+// `/home/jpbruinsslot/.config/nvim` will become `.config/nvim`
 func GetRelativePath(fullPath string) (string, error) {
 	relPath := strings.Split(fullPath, HomeDir())
 
@@ -85,7 +77,6 @@ func GetRelativePath(fullPath string) (string, error) {
 // wants to commit the changes made to its repository in the form of the
 // `-p` flag used in combination with the `dot add` and `dot rm` commands.
 func GitCommitPush(name, action string) {
-
 	// load config
 	c, err := NewConfig(PathDotConfig)
 	if err != nil {
@@ -109,7 +100,7 @@ func GitCommitPush(name, action string) {
 	if err != nil {
 		PrintBodyError("something went wrong with adding the changes " +
 			"to the repository, see the output below:")
-		log.Println(cmdGitAddOutput)
+		log.Println(string(cmdGitAddOutput))
 		log.Fatalln(err)
 	}
 
@@ -118,9 +109,10 @@ func GitCommitPush(name, action string) {
 
 	// set commit message
 	var commitMessage string
-	if action == "add" {
+	switch action {
+	case "add":
 		commitMessage = fmt.Sprintf("%s: added %s for tracking", name, name)
-	} else if action == "rm" {
+	case "rm":
 		commitMessage = fmt.Sprintf("%s: removed %s from tracking", name, name)
 	}
 
@@ -135,7 +127,7 @@ func GitCommitPush(name, action string) {
 	if err != nil {
 		PrintBodyError("something went wrong with commiting the changes " +
 			"to the repository, see the output below:")
-		log.Println(cmdGitCommitOutput)
+		log.Println(string(cmdGitCommitOutput))
 		log.Fatalln(err)
 	}
 
@@ -146,9 +138,7 @@ func GitCommitPush(name, action string) {
 	if err != nil {
 		PrintBodyError("something went wrong with pushing the changes " +
 			"to the repository, see the output below:")
-		log.Println(cmdGitPushOutput)
+		log.Println(string(cmdGitPushOutput))
 		log.Fatalln(err)
 	}
-
-	return
 }

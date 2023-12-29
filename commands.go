@@ -5,60 +5,14 @@ import (
 	"log"
 	"os"
 	"text/tabwriter"
-
-	"github.com/urfave/cli"
-)
-
-const (
-	descSync   = "Sync your dotfiles"
-	descAdd    = "`dot add [name] [path]`, to add file or folder for tracking"
-	descRemove = "`dot rm [name]`, to remove file or folder from tracking"
-	descPush   = "Pushes the dotfiles repository"
-	descList   = "Lists all the entries that are tracked"
-)
-
-var (
-	FlagPush = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "push, p",
-			Usage: descPush,
-		},
-	}
-
-	CommandArray = []cli.Command{
-		{
-			Name:   "sync",
-			Usage:  descSync,
-			Action: CommandSync,
-		},
-		{
-			Name:   "add",
-			Usage:  descAdd,
-			Action: CommandAdd,
-			Flags:  FlagPush,
-		},
-		{
-			Name:   "rm",
-			Usage:  descRemove,
-			Action: CommandRemove,
-			Flags:  FlagPush,
-		},
-		{
-			Name:   "list",
-			Usage:  descList,
-			Action: CommandList,
-		},
-	}
 )
 
 // CommandSync will do several things depending configuration:
-// 1. Sync files when there is a .dotconfig present in the correct location
-// 2. Create a .dotconfig in the correct location when it isn't
-// 3. Create a new setup of dot, including a .dotconfig, files and backup
-//    folders
-func CommandSync(c *cli.Context) {
-	PrintHeader("Setting up dot ...")
-
+//  1. Sync files when there is a .dotconfig present in the correct location
+//  2. Create a .dotconfig in the correct location when it isn't
+//  3. Create a new setup of dot, including a .dotconfig, files and backup
+//     folders
+func CommandSync() {
 	// get current working directory
 	currentWorkingDir, err := os.Getwd()
 	if err != nil {
@@ -89,8 +43,7 @@ func CommandSync(c *cli.Context) {
 
 		// make sure .dotconfig is present in DotPath
 		if _, err := os.Stat(pathDotConfigCwd); err != nil {
-			PrintBodyError("couldn't find .dotconfig in your archive, " +
-				"make sure it is present")
+			PrintBodyError("couldn't find .dotconfig in your archive, make sure it is present")
 			return
 		}
 
@@ -136,8 +89,7 @@ func CommandSync(c *cli.Context) {
 
 		// .dotconfig not found in home dir,
 		// .dotconfig not found in current working dir => new setup
-		PrintBody("Couldn't find the .dotconfig file, do you want to create " +
-			"a new one? [Y/N]")
+		PrintBody("Couldn't find the .dotconfig file, do you want to create a new one? [Y/N]")
 
 		// get input
 		var input string
@@ -151,7 +103,7 @@ func CommandSync(c *cli.Context) {
 			// create new .dotconfig file
 			SetupInitialMachine(PathDotConfig)
 
-			PrintBody("You're now ready to use dot! Type 'dot --help' for help")
+			PrintBody("You're now ready to use dot! Type 'dot -help' for help")
 		} else {
 			return
 		}
@@ -159,34 +111,19 @@ func CommandSync(c *cli.Context) {
 }
 
 // CommandAdd will add a file or folder for tracking.
-func CommandAdd(c *cli.Context) {
+func CommandAdd(name, path string, push, force bool) {
 	PrintHeader("Adding new entry for tracking ...")
-
-	// check correct number of args
-	if !c.Args().Present() || len(c.Args()) != 2 {
-		PrintBodyError(
-			"please review your arguments. Usage: dot add [name] [path]")
-		return
-	}
-
-	_ = TrackFile(c.Args()[0], c.Args()[1], c.Bool("push"), false)
+	_ = TrackFile(name, path, push, false)
 }
 
 // CommandRemove will remove a file from tracking.
-func CommandRemove(c *cli.Context) {
+func CommandRemove(name string, push bool) {
 	PrintHeader("Removing entry from tracking ...")
-
-	// check correct number of args
-	if !c.Args().Present() || len(c.Args()) != 1 {
-		PrintBodyError("please review your arguments. Usage: dot rm [name]")
-		return
-	}
-
-	UntrackFile(c.Args().First(), c.Bool("push"))
+	UntrackFile(name, push)
 }
 
 // CommandList will output the list of files that are being tracked by dot.
-func CommandList(c *cli.Context) {
+func CommandList() {
 	PrintHeader("Following files are being tracked by dot ...")
 
 	// open config file
@@ -198,8 +135,9 @@ func CommandList(c *cli.Context) {
 
 	// check if there is anything to display
 	if len(config.Files) == 0 {
-		PrintBodyError("there are no files being tracked. Begin doing so, " +
-			"with `dot add [name] [path]`")
+		PrintBodyError(
+			"there are no files being tracked. Begin doing so, with `dot add -name [name] -path [path]`",
+		)
 		return
 	}
 

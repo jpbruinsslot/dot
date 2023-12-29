@@ -49,20 +49,24 @@ func SyncFiles() {
 // to the file to be tracked.
 //
 // TrackFile can be called from two contexes:
-// 1. From SyncFiles, it will read all the tracked files from the config and
-//    make track files if necessary.
-// 2. From CommandAdd, this will add a new file for tracking
+//
+//  1. From SyncFiles, it will read all the tracked files from the config and
+//     make track files if necessary.
+//
+//  2. From CommandAdd, this will add a new file for tracking
 //
 // TrackFile will make a distinction between a new file and a file that is
 // already been tracked:
-// 1. TrackFile can't find the symlink, but the file is present in the
-//    dot_path (the folder that holds all the original files). Then we need to
-//    relink it, thus creating a symlink at the correct location. This happens
-//    we you run dot on a new 'additional machine'.
-// 2. TrackFile can't find the symlink, and the file is also not present in
-//    the dot_path folder. This will mean that it is a new file were are going
-//    to track. So we copy the file to the files folder, create a symlink, and
-//    add an entry to the config file.
+//
+//  1. TrackFile can't find the symlink, but the file is present in the
+//     dot_path (the folder that holds all the original files). Then we need to
+//     relink it, thus creating a symlink at the correct location. This happens
+//     we you run dot on a new 'additional machine'.
+//
+//  2. TrackFile can't find the symlink, and the file is also not present in
+//     the dot_path folder. This will mean that it is a new file were are going
+//     to track. So we copy the file to the files folder, create a symlink, and
+//     add an entry to the config file.
 func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 	// load config
 	c, err := NewConfig(PathDotConfig)
@@ -119,6 +123,10 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 
 	// check if path is already symlinked
 	s, err := os.Lstat(fullPath)
+	if err != nil {
+		return copyAll
+	}
+
 	if s.Mode()&os.ModeSymlink == os.ModeSymlink {
 		message := fmt.Sprintf("%s is already symlinked", name)
 		PrintBody(message)
@@ -132,7 +140,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 		PrintBody(message)
 
 		// put in backup folder, set named folder based on `name`, e.g.:
-		// `/home/erroneousboat/dotfiles/backup/[name]/[base]`
+		// `/home/jpbruinsslot/dotfiles/backup/[name]/[base]`
 		dst := fmt.Sprintf("%s%s/backup/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = MakeAndMoveToDir(fullPath, dst)
 		if err != nil {
@@ -180,7 +188,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 		PrintBody(message)
 
 		// put in files folder, set named folder based on `name`, e.g.:
-		// `/home/erroneousboat/dotfiles/files/[name]/[base]`
+		// `/home/jpbruinsslot/dotfiles/files/[name]/[base]`
 		dst := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
 		err = MakeAndMoveToDir(fullPath, dst)
 		if err != nil {
