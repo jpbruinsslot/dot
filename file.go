@@ -8,11 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 )
 
 func SyncFiles() {
@@ -30,11 +27,11 @@ func SyncFiles() {
 	// when we have files the sync them
 	if len(c.Files) > 0 {
 		// for every file track it
-		copyAll := false
 		for name, path := range c.Files {
-			// get full path
-			fullPath := fmt.Sprintf("%s%s", HomeDir(), path)
-			copyAll = TrackFile(name, fullPath, false, copyAll)
+			err := trackFile(c, name, HomePath(path), false)
+			if err != nil {
+				PrintBodyError(err.Error())
+			}
 		}
 	} else {
 		PrintBodyError("there aren't any files being tracked. Begin doing so with: `dot add -name [name] -path [path]`")
@@ -60,158 +57,134 @@ func SyncFiles() {
 //  1. TrackFile can't find the symlink, but the file is present in the
 //     dot_path (the folder that holds all the original files). Then we need to
 //     relink it, thus creating a symlink at the correct location. This happens
-//     we you run dot on a new 'additional machine'.
+//     we you run dot on a new 'additional machine'. When a file already exists
+//     at that location it is moved to the backup folder first.
 //
 //  2. TrackFile can't find the symlink, and the file is also not present in
 //     the dot_path folder. This will mean that it is a new file were are going
 //     to track. So we copy the file to the files folder, create a symlink, and
 //     add an entry to the config file.
-func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
+func TrackFile(name string, fullPath string, push bool) error {
 	// load config
 	c, err := NewConfig(PathDotConfig)
 	if err != nil {
-		PrintBodyError("not able to find .dotconfig")
-		return copyAll
+		return fmt.Errorf("not able to find .dotconfig: %v", err)
 	}
 
+	return trackFile(c, name, fullPath, push)
+}
+
+func trackFile(c *Config, name string, fullPath string, push bool) error {
+	// trim potential trailing slash, otherwise base and symlink are wrong
+	fullPath = filepath.Clean(fullPath)
+
 	// Base
-	base := path.Base(fullPath)
+	base := filepath.Base(fullPath)
 
 	// get relative path
 	relPath, err := GetRelativePath(fullPath)
 	if err != nil {
-		PrintBodyError(err.Error())
-		return copyAll
+		return err
 	}
 
-	// check if path is present
-	_, err = os.Stat(fullPath)
-	if err != nil {
-		PrintBodyError(fmt.Sprintf("file not present on system: %s", fullPath))
+	// location of the file inside the archive, e.g.:
+	// `/home/jpbruinsslot/dotfiles/files/[name]/[base]`
+	repoFile := filepath.Join(c.Dir(), "files", name, base)
 
-		if copyAll {
-			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-			MakeAndCopyToDir(src, fullPath)
-			return TrackFile(name, fullPath, push, copyAll)
-		}
-
-		PrintBody("Copy file(s) to its destination? [All/Y/N]")
-		var input string
-		_, err := fmt.Scan(&input)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		switch input {
-		case "All":
-			copyAll = true
-			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-			err := MakeAndCopyToDir(src, fullPath)
-			if err != nil {
-				PrintBodyError(err.Error())
-				return copyAll
-			}
-			return TrackFile(name, fullPath, push, copyAll)
-		case "Y":
-			src := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-			err := MakeAndCopyToDir(src, fullPath)
-			if err != nil {
-				PrintBodyError(err.Error())
-				return copyAll
-			}
-			return TrackFile(name, fullPath, push, copyAll)
-		case "N":
-			PrintBodyError(fmt.Sprintf("Ignoring %s", name))
-			return copyAll
-		default:
-			PrintBodyError("Invalid input")
-			return copyAll
-		}
-	}
-
-	// check if path is already symlinked
+	// check if path is already symlinked, Lstat so a dangling symlink is
+	// reported as well instead of being treated as a missing file
 	s, err := os.Lstat(fullPath)
-	if err != nil {
-		return copyAll
-	}
-
-	if s.Mode()&os.ModeSymlink == os.ModeSymlink {
+	if err == nil && s.Mode()&os.ModeSymlink == os.ModeSymlink {
+		if _, err := os.Stat(fullPath); err != nil {
+			return fmt.Errorf("%s is a broken symlink, remove it and sync again", fullPath)
+		}
 		PrintBody(fmt.Sprintf("%s is already symlinked", name))
-		return copyAll
+		return nil
 	}
 
-	repoPath := fmt.Sprintf("%s%s/files/%s/", HomeDir(), c.DotPath, name)
-	if _, err := os.Stat(repoPath); err == nil {
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("not able to get file info: %v", err)
+		}
+
+		// nothing at the original location, so there is nothing to back up:
+		// symlink straight to the file in the archive
+		if _, err := os.Stat(repoFile); err != nil {
+			return fmt.Errorf("%s is neither on the system nor in the archive (%s)", fullPath, repoFile)
+		}
+
+		PrintBody(fmt.Sprintf("Symlinking: %s", name))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			return err
+		}
+		if err := os.Symlink(repoFile, fullPath); err != nil {
+			return fmt.Errorf("not able to create symlink: %v", err)
+		}
+		return nil
+	}
+
+	if _, err := os.Stat(repoFile); err == nil {
 		// no symlink found, already in repo => additional machine
 		PrintBody(fmt.Sprintf("Symlinking: %s", name))
 
 		// put in backup folder, set named folder based on `name`, e.g.:
 		// `/home/jpbruinsslot/dotfiles/backup/[name]/[base]`
-		dst := fmt.Sprintf("%s%s/backup/%s/%s", HomeDir(), c.DotPath, name, base)
+		dst := filepath.Join(c.Dir(), "backup", name, base)
 		err = MakeAndMoveToDir(fullPath, dst)
 		if err != nil {
-			msg := fmt.Sprintf("not able to move files to %s (%s)", dst, err)
-			PrintBodyError(msg)
+			PrintBodyError(fmt.Sprintf("not able to move files to %s (%s)", dst, err))
 
-			prompt := fmt.Sprintf("Remove %s ? [Y/N]", dst)
-			PrintBody(prompt)
+			PrintBody(fmt.Sprintf("Remove %s ? [Y/N]", dst))
 			var input string
 			_, err := fmt.Scan(&input)
 			if err != nil {
-				log.Fatal(err)
+				return fmt.Errorf("not able to scan input: %v", err)
 			}
 
 			if input == "Y" {
 				err := os.RemoveAll(dst)
 				if err != nil {
-					log.Fatal(err)
+					return fmt.Errorf("not able to remove %s: %v", dst, err)
 				}
 
 				err = MakeAndMoveToDir(fullPath, dst)
 				if err != nil {
-					log.Fatal(err)
+					return fmt.Errorf("not able to move files to %s: %v", dst, err)
 				}
 			} else {
 				msg := fmt.Sprintf("ignoring %s", name)
 				PrintBodyError(msg)
-				return copyAll
+				return nil
 			}
 		}
 
-		// trim potential trailing slash for symlink
-		fullPath = strings.TrimRight(fullPath, "/")
-
 		// create symlink (os.Symlink(oldname, newname))
-		dst = fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-		err = os.Symlink(dst, fullPath)
+		err = os.Symlink(repoFile, fullPath)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("not able to create symlink: %v", err)
 		}
 
 	} else {
 		// no symlink found, not in repo => new entry
 		PrintBody(fmt.Sprintf("Symlinking: %s", name))
 
-		// put in files folder, set named folder based on `name`, e.g.:
-		// `/home/jpbruinsslot/dotfiles/files/[name]/[base]`
-		dst := fmt.Sprintf("%s%s/files/%s/%s", HomeDir(), c.DotPath, name, base)
-		err = MakeAndMoveToDir(fullPath, dst)
+		// put in files folder, set named folder based on `name`
+		err = MakeAndMoveToDir(fullPath, repoFile)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("not able to move files to %s: %v", repoFile, err)
 		}
 
-		// trim potential trailing slash for symlink
-		fullPath = strings.TrimRight(fullPath, "/")
-
 		// create symlink (os.Symlink(oldname, newname))
-		err = os.Symlink(dst, fullPath)
+		err = os.Symlink(repoFile, fullPath)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("not able to create symlink: %v", err)
 		}
 
 		// create entry in .dotconfig file
 		c.Files[name] = relPath
-		c.Save()
+		if err := c.Save(); err != nil {
+			return fmt.Errorf("not able to save .dotconfig: %v", err)
+		}
 
 		// push changes to repository
 		if push {
@@ -219,7 +192,7 @@ func TrackFile(name string, fullPath string, push bool, copyAll bool) bool {
 		}
 	}
 
-	return copyAll
+	return nil
 }
 
 // UntrackFile will remove a file from tracking. `name` will be the key
@@ -245,7 +218,7 @@ func UntrackFile(name string, push bool) {
 	}
 
 	// check if path (the symlink) is present
-	pathSymlink := fmt.Sprintf("%s%s", HomeDir(), path)
+	pathSymlink := HomePath(path)
 	f, err := os.Lstat(pathSymlink)
 	if err != nil {
 		PrintBodyError(fmt.Sprintf("not able to find: %s", path))
@@ -259,7 +232,7 @@ func UntrackFile(name string, push bool) {
 	}
 
 	// check if src is present
-	src := fmt.Sprintf("%s%s/files/%s%s", HomeDir(), c.DotPath, name, path)
+	src := filepath.Join(c.Dir(), "files", name, filepath.Base(pathSymlink))
 	if _, err = os.Stat(src); err != nil {
 		PrintBodyError(fmt.Sprintf("not able to find %s", src))
 		return
@@ -273,20 +246,21 @@ func UntrackFile(name string, push bool) {
 	}
 
 	// move the file or directory
-	dst := fmt.Sprintf("%s%s", HomeDir(), path)
-
+	dst := pathSymlink
 	PrintBody(fmt.Sprintf("Moving %s back to %s", name, dst))
 
 	err = MakeAndCopyToDir(src, dst)
 	if err != nil {
-		log.Fatal(err)
+		PrintBodyError(fmt.Sprintf("not able to move %s back to %s", name, dst))
+		return
 	}
 
 	// remove tracked files from repo dir
-	entry := fmt.Sprintf("%s%s/files/%s", HomeDir(), c.DotPath, name)
+	entry := filepath.Join(c.Dir(), "files", name)
 	err = os.RemoveAll(entry)
 	if err != nil {
-		log.Fatal(err)
+		PrintBodyError(fmt.Sprintf("not able to remove %s", entry))
+		return
 	}
 
 	// remove entry from config and save config
@@ -365,7 +339,7 @@ func CopyDir(src string, dst string) error {
 	// Check dst
 	_, err = os.Stat(dst)
 	if err != nil && !os.IsNotExist(err) {
-		return nil
+		return err
 	}
 	if err == nil {
 		return errors.New("dst already exist")
@@ -376,7 +350,7 @@ func CopyDir(src string, dst string) error {
 		return err
 	}
 
-	os.MkdirAll(dst, f.Mode())
+	err = os.MkdirAll(dst, f.Mode())
 	if err != nil {
 		return err
 	}
@@ -385,16 +359,23 @@ func CopyDir(src string, dst string) error {
 		srcPath := filepath.Join(src, file.Name())
 		dstPath := filepath.Join(dst, file.Name())
 
-		if file.IsDir() {
+		if file.Mode()&os.ModeSymlink != 0 {
+			// recreate symlinks as-is, skipping them would lose them when
+			// the source is removed after the copy
+			target, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			err = os.Symlink(target, dstPath)
+			if err != nil {
+				return err
+			}
+		} else if file.IsDir() {
 			err = CopyDir(srcPath, dstPath)
 			if err != nil {
 				return err
 			}
 		} else {
-			if file.Mode()&os.ModeSymlink != 0 {
-				continue
-			}
-
 			err = CopyFile(srcPath, dstPath)
 			if err != nil {
 				return err

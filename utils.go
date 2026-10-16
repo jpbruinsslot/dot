@@ -1,11 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	homedir "github.com/mitchellh/go-homedir"
@@ -36,40 +35,27 @@ func HomeDir() string {
 	return dir
 }
 
-// GetRelativePathFromCwd will remove the home folder from the current working
-// directory:
-//
-// `/home/jpbruinsslot/dotfiles/` will become `dotfiles/`
-func GetRelativePathFromCwd() (string, error) {
-	// get current working directory, this returns absolute path
-	currentWorkingDir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	// remove HomeDir() from the currentWorkingDir to get relative path
-	relPath := strings.Split(currentWorkingDir, HomeDir())
-
-	if len(relPath) != 2 {
-		err := errors.New("not able to uncover relative path")
-		return "", err
-	} else {
-		return relPath[1], nil
-	}
+// HomePath returns the absolute path of `relPath` inside the home folder.
+// `relPath` may be stored with or without a leading slash (older .dotconfig
+// files use `/.config/nvim`, newer ones `.config/nvim`).
+func HomePath(relPath string) string {
+	return filepath.Join(HomeDir(), relPath)
 }
 
 // GetRelativePath will remove the home folder from the argument `fullPath`:
 //
 // `/home/jpbruinsslot/.config/nvim` will become `.config/nvim`
 func GetRelativePath(fullPath string) (string, error) {
-	relPath := strings.Split(fullPath, HomeDir())
-
-	if len(relPath) != 2 {
-		err := errors.New("not able to uncover relative path")
+	relPath, err := filepath.Rel(HomeDir(), filepath.Clean(fullPath))
+	if err != nil {
 		return "", err
 	}
 
-	return relPath[1], nil
+	if relPath == ".." || strings.HasPrefix(relPath, "../") {
+		return "", fmt.Errorf("%s is not inside the home folder", fullPath)
+	}
+
+	return relPath, nil
 }
 
 // GitCommitPush will execute the command git commit -a -m [message] and
@@ -86,9 +72,6 @@ func GitCommitPush(name, action string) {
 		return
 	}
 
-	// change current working directory to DotPath
-	os.Chdir(c.DotPath)
-
 	PrintHeader("Committing changes to repository ...")
 
 	// setup git command
@@ -96,7 +79,9 @@ func GitCommitPush(name, action string) {
 
 	// execute git add
 	addArgs := []string{"add", "-A"}
-	cmdGitAddOutput, err := exec.Command(cmd, addArgs...).Output()
+	gitAddCmd := exec.Command(cmd, addArgs...)
+	gitAddCmd.Dir = c.Dir()
+	cmdGitAddOutput, err := gitAddCmd.CombinedOutput()
 	if err != nil {
 		PrintBodyError("something went wrong with adding the changes " +
 			"to the repository, see the output below:")
@@ -123,7 +108,9 @@ func GitCommitPush(name, action string) {
 	PrintBody(message)
 
 	// execute git commit
-	cmdGitCommitOutput, err := exec.Command(cmd, commitArgs...).Output()
+	gitCommitCmd := exec.Command(cmd, commitArgs...)
+	gitCommitCmd.Dir = c.Dir()
+	cmdGitCommitOutput, err := gitCommitCmd.CombinedOutput()
 	if err != nil {
 		PrintBodyError("something went wrong with commiting the changes " +
 			"to the repository, see the output below:")
@@ -134,7 +121,9 @@ func GitCommitPush(name, action string) {
 	// execute git push
 	PrintBody("Pushing changes to repository")
 	pushArgs := []string{"push", "origin"}
-	cmdGitPushOutput, err := exec.Command(cmd, pushArgs...).Output()
+	gitPushCmd := exec.Command(cmd, pushArgs...)
+	gitPushCmd.Dir = c.Dir()
+	cmdGitPushOutput, err := gitPushCmd.CombinedOutput()
 	if err != nil {
 		PrintBodyError("something went wrong with pushing the changes " +
 			"to the repository, see the output below:")

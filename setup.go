@@ -27,14 +27,22 @@ func SetupInitialMachine(pathDotConfig string) {
 	}
 
 	// add .dotconfig for tracking
-	_ = TrackFile("dotconfig", pathDotConfig, false, false)
+	err = TrackFile("dotconfig", pathDotConfig, false)
+	if err != nil {
+		PrintBodyError(err.Error())
+		return
+	}
 }
 
 // CreateDotConfigFile will create a .dotconfig file in the specified path
 func CreateDotConfigFile(pathDotConfig string) error {
 	// remove HomeDir() from the currentWorkingDir to get relative path
 	// we need this relative path to put in the .dotconfig file
-	relPath, err := GetRelativePathFromCwd()
+	currentWorkingDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	relPath, err := GetRelativePath(currentWorkingDir)
 	if err != nil {
 		return err
 	}
