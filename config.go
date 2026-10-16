@@ -23,6 +23,11 @@ type Config struct {
 	Files map[string]string `json:"files"`
 }
 
+// Dir returns the absolute path of the folder that holds the tracked files.
+func (c *Config) Dir() string {
+	return HomePath(c.DotPath)
+}
+
 // Constructor for the Config struct
 func NewConfig(path string) (*Config, error) {
 	c := &Config{}

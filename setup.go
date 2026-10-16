@@ -38,7 +38,11 @@ func SetupInitialMachine(pathDotConfig string) {
 func CreateDotConfigFile(pathDotConfig string) error {
 	// remove HomeDir() from the currentWorkingDir to get relative path
 	// we need this relative path to put in the .dotconfig file
-	relPath, err := GetRelativePathFromCwd()
+	currentWorkingDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	relPath, err := GetRelativePath(currentWorkingDir)
 	if err != nil {
 		return err
 	}

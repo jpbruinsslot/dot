@@ -149,7 +149,7 @@ func CommandList() {
 	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
 	fmt.Fprintln(w, "name\tpath")
 	for name, path := range config.Files {
-		line := fmt.Sprintf("%s\t%s%s", name, HomeDir(), path)
+		line := fmt.Sprintf("%s\t%s", name, HomePath(path))
 		fmt.Fprintln(w, line)
 	}
 	w.Flush()
